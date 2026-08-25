@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌈 Rainbow Radar</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #0d1117, #161b2e, #0f1f3f);
+    color: #eee;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    overflow-x: hidden;
+  }
+
+  h1 {
+    font-size: 2.4rem;
+    margin-bottom: 4px;
+    background: linear-gradient(90deg, #ff0080, #ff8c00, #ffd700, #00d26a, #00bfff, #8a2be2, #ff0080);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+    animation: rainbow-shift 4s linear infinite;
+  }
+  @keyframes rainbow-shift {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 300% 50%; }
+  }
+  .subtitle { color: #7a8aa0; margin-bottom: 18px; font-size: .88rem; text-align: center; }
+
+  .screen { display: none; width: 100%; max-width: 680px; text-align: center; }
+  .screen.active { display: block; }
+
+  .glass-panel {
+    background: rgba(255,255,255,.05);
+    border-radius: 16px;
+    padding: 28px 36px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,.08);
+  }
+
+  #setup-screen h2 { margin-bottom: 16px; }
+  .how-to-play {
+    text-align: left; background: rgba(0,0,0,.25); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 22px; font-size: .85rem; line-height: 1.6;
+  }
+  .how-to-play h3 { font-size: .95rem; margin-bottom: 8px; color: #ffd700; }
+  .how-to-play ol { padding-left: 20px; color: #aab; }
+  .how-to-play ol li { margin-bottom: 4px; }
+  .input-group { margin-bottom: 16px; }
+  .input-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #ccd; }
+  .input-group input, .input-group select {
+    width: 100%; padding: 10px 14px; border: 2px solid #2a3a5a; border-radius: 8px;
+    background: rgba(0,0,0,.3); color: #fff; font-size: 1rem;
+  }
+  .input-group input:focus, .input-group select:focus { outline: none; border-color: #00bfff; }
+  .btn-primary {
+    width: 100%; padding: 14px; border: none; border-radius: 10px;
+    font-size: 1.1rem; font-weight: 700; cursor: pointer;
+    background: linear-gradient(90deg, #ff0080, #ff8c00, #ffd700, #00d26a, #00bfff, #8a2be2);
+    background-size: 300% 100%; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.5);
+    transition: transform .15s; animation: rainbow-shift 4s linear infinite;
+  }
+  .btn-primary:hover { transform: scale(1.03); }
+  .btn-primary:active { transform: scale(.98); }
+  .btn-secondary {
+    padding: 10px 24px; border: 2px solid #445; border-radius: 8px;
+    cursor: pointer; font-size: .95rem; font-weight: 600; background: #233; color: #fff;
+  }
+  .btn-secondary:hover { background: #344; }
+  .btn-success {
+    padding: 10px 24px; border: none; border-radius: 8px;
+    cursor: pointer; font-size: 1rem; font-weight: 700; background: #00b050; color: #fff;
+  }
+  .btn-success:hover { background: #00d26a; }
+  .btn-success:disabled { opacity: .35; cursor: not-allowed; }
+
+  .placement-header { margin-bottom: 12px; }
+  .placement-header .pname { font-size: 1.35rem; font-weight: 700; color: #ffd700; }
+  .placement-header .pinstructions { color: #8899bb; font-size: .82rem; margin-top: 4px; }
+  .placement-actions { margin-top: 14px; display: flex; gap: 12px; justify-content: center; }
+
+  /* ── Unified grid (labels + cells in one CSS grid) ── */
+  .grid-wrapper { display: inline-block; margin: 8px auto; }
+  .uni-grid {
+    display: grid;
+    gap: 3px;
+    background: #1a1a2e;
+    padding: 6px;
+    border-radius: 8px;
+  }
+  .uni-grid .grid-label {
+    display: flex; align-items: center; justify-content: center;
+    font-size: .72rem; color: #556; font-weight: 600;
+  }
+  .grid-cell {
+    width: 44px; height: 44px; border-radius: 6px;
+    background: #252540; display: flex; align-items: center; justify-content: center;
+    font-size: .65rem; font-weight: 700; cursor: pointer;
+    transition: background .15s, transform .1s, box-shadow .2s;
+    user-select: none; position: relative; overflow: hidden;
+  }
+  .grid-cell:hover { background: #353560; transform: scale(1.08); }
+  .grid-cell.placing { background: #445; color: #ffd700; }
+  .grid-cell.rainbow {
+    background: linear-gradient(135deg, #ff0080, #ff8c00, #ffd700, #00d26a, #00bfff, #8a2be2);
+    background-size: 300% 100%; animation: rainbow-shift 2.5s linear infinite;
+    color: #fff; text-shadow: 0 0 4px rgba(0,0,0,.9);
+  }
+  .grid-cell.rainbow .cell-content, .grid-cell.hit .cell-content {
+    display: flex; flex-direction: column; align-items: center; line-height: 1.1;
+  }
+  .grid-cell.rainbow .initials, .grid-cell.hit .initials { font-size: .58rem; }
+  .grid-cell.rainbow .dir-arrow, .grid-cell.hit .dir-arrow { font-size: .68rem; }
+  .grid-cell.hit {
+    background: radial-gradient(circle, #ff5555, #aa1010) !important;
+    color: #fff; text-shadow: 0 0 4px rgba(0,0,0,.9); animation: hit-flash .5s;
+  }
+  .grid-cell.miss { background: #2a3550 !important; color: #456; }
+  .grid-cell.miss::after { content: "💧"; font-size: .8rem; opacity: .5; }
+  .grid-cell.miss.reguessable { cursor: pointer; }
+  .grid-cell.miss.reguessable:hover { background: #3a4560 !important; }
+  .grid-cell.last-guess {
+    box-shadow: 0 0 0 3px #00bfff, 0 0 12px rgba(0,191,255,.5);
+    animation: radar-ping .6s ease-out;
+  }
+  .grid-cell.disabled { cursor: default; }
+  .grid-cell.disabled:hover { transform: none; }
+  .grid-cell.locked { pointer-events: none; }
+  @keyframes hit-flash { 0% { transform: scale(1.5); filter: brightness(2.5); } 100% { transform: scale(1); filter: brightness(1); } }
+  @keyframes radar-ping { 0% { box-shadow: 0 0 0 0 rgba(0,191,255,.7); } 100% { box-shadow: 0 0 0 20px rgba(0,191,255,0); } }
+
+  /* ── Scout ── */
+  #scout-screen .scout-banner { font-size: 1.3rem; font-weight: 700; color: #ffd700; margin-bottom: 6px; }
+  #scout-screen .scout-sub { color: #8899bb; font-size: .85rem; margin-bottom: 8px; }
+  .countdown {
+    font-size: 3rem; font-weight: 900; color: #00bfff;
+    text-shadow: 0 0 20px rgba(0,191,255,.5); margin: 10px 0;
+    animation: countdown-pulse 1s ease-in-out infinite;
+  }
+  @keyframes countdown-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+  .countdown-bar { width: 200px; height: 6px; background: #233; border-radius: 3px; margin: 8px auto; overflow: hidden; }
+  .countdown-bar-fill { height: 100%; background: linear-gradient(90deg, #00bfff, #8a2be2); transition: width 1s linear; }
+  .scout-grids-row { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+  .scout-grid-block { text-align: center; }
+  .scout-grid-block .sg-title { font-size: .82rem; color: #ccd; margin-bottom: 4px; font-weight: 600; }
+
+  /* ── Play ── */
+  .turn-banner {
+    font-size: 1.25rem; font-weight: 700; margin-bottom: 8px;
+    padding: 10px 20px; border-radius: 10px; background: rgba(255,255,255,.06);
+    transition: background .3s;
+  }
+  .turn-banner.p1-turn { border: 2px solid rgba(255,215,0,.3); background: rgba(255,215,0,.08); }
+  .turn-banner.p2-turn { border: 2px solid rgba(0,191,255,.3); background: rgba(0,191,255,.08); }
+  .turn-banner .current-player { color: #ffd700; }
+  .turn-info { color: #667; font-size: .8rem; margin-bottom: 10px; }
+  .scores { display: flex; justify-content: center; gap: 30px; margin-bottom: 12px; }
+  .score-box {
+    text-align: center; padding: 8px 22px; border-radius: 10px;
+    background: rgba(255,255,255,.05); transition: background .3s, border-color .3s;
+    border: 2px solid transparent;
+  }
+  .score-box.active-p1 { border-color: rgba(255,215,0,.4); background: rgba(255,215,0,.08); }
+  .score-box.active-p2 { border-color: rgba(0,191,255,.4); background: rgba(0,191,255,.08); }
+  .score-box .sname { font-size: .8rem; color: #8899bb; }
+  .score-box .sscore { font-size: 1.8rem; font-weight: 800; color: #ffd700; }
+  .grid-title { font-size: .88rem; color: #8899bb; margin: 6px 0 2px; }
+  .proximity-hint { margin-top: 12px; font-size: 1.1rem; font-weight: 700; min-height: 30px; }
+  .legend {
+    margin-top: 10px; font-size: .72rem; color: #556;
+    display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+  }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .legend .swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+  .legend .sw-hit { background: radial-gradient(circle, #ff5555, #aa1010); }
+  .legend .sw-miss { background: #2a3550; }
+  .legend .sw-rainbow { background: linear-gradient(135deg, #ff0080, #ffd700, #00bfff); }
+
+  /* ── Game over ── */
+  #game-over-screen .winner-name { font-size: 1.8rem; color: #ffd700; font-weight: 800; margin-bottom: 12px; }
+  #game-over-screen .final-scores { display: flex; justify-content: center; gap: 30px; margin-bottom: 20px; }
+  #game-over-screen .reveal-title { font-size: .9rem; color: #8899bb; margin: 16px 0 6px; }
+  .reveal-grids { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+  .reveal-grid-block { text-align: center; }
+  .reveal-grid-block .rg-title { font-size: .82rem; color: #ccd; margin-bottom: 4px; font-weight: 600; }
+
+  #confetti-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+  #toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.85); color: #ffd700; padding: 12px 28px; border-radius: 10px;
+    font-size: 1.1rem; font-weight: 700; z-index: 500; display: none; border: 1px solid rgba(255,215,0,.3);
+  }
+
+  /* ── Capture celebration overlay ── */
+  #capture-overlay {
+    position: fixed; inset: 0; z-index: 700;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+  }
+  #capture-overlay .capture-text {
+    font-size: 5rem; font-weight: 900; text-align: center;
+    animation: capture-bounce .6s ease-out;
+  }
+  @keyframes capture-bounce {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  #capture-overlay .capture-sub {
+    color: #ffd700; font-size: 1.5rem; margin-top: 10px; font-weight: 700;
+  }
+</style>
+</head>
+<body>
+
+<h1>🌈 Rainbow Radar</h1>
+<p class="subtitle">Rainbows move every turn — track them, predict where they go, and capture them all!</p>
+
+<!-- ═══ SETUP ═══ -->
+<div id="setup-screen" class="screen active">
+  <div class="glass-panel">
+    <h2>Player Setup</h2>
+    <div class="how-to-play">
+      <h3>📋 How to Play</h3>
+      <ol>
+        <li><b>🎯 Place</b> your rainbows on the grid (3-cell lines, horizontal or vertical)</li>
+        <li><b>👀 Scout</b> — both players see all rainbow positions &amp; directions for 5 seconds</li>
+        <li><b>🔄 Each turn</b> rainbows move 1 cell in their direction (25% chance to turn!) — they bounce off walls. <b>Damaged rainbows can't move!</b></li>
+        <li><b>🎯 Guess</b> where a rainbow is — <b>hit and you go again!</b> Miss and it's the other player's turn. Re-guess missed cells (rainbows may have moved there!)</li>
+        <li><b>🌡️ Miss</b> → get a proximity hint (🔥 hot / ❄️ cold)</li>
+        <li><b>🏆 Win</b> by capturing all opponent's rainbow cells — or most points after 15 rounds each!</li>
+      </ol>
+    </div>
+    <div class="input-group">
+      <label for="p1-name">Player 1 Name</label>
+      <input id="p1-name" type="text" placeholder="e.g. Bob Smith" />
+    </div>
+    <div class="input-group">
+      <label for="p2-name">Player 2 Name</label>
+      <input id="p2-name" type="text" placeholder="e.g. Alice Jones" />
+    </div>
+    <div class="input-group">
+      <label for="rainbow-count">Rainbows per player</label>
+      <select id="rainbow-count">
+        <option value="2">2 rainbows (quick)</option>
+        <option value="3" selected>3 rainbows (normal)</option>
+        <option value="4">4 rainbows (long)</option>
+      </select>
+    </div>
+    <button id="start-btn" class="btn-primary">Start Game 🌈</button>
+  </div>
+</div>
+
+<!-- ═══ PLACEMENT ═══ -->
+<div id="placement-screen" class="screen">
+  <div class="placement-header">
+    <div class="pname" id="placement-player-name"></div>
+    <div class="pinstructions" id="placement-instructions">Click a cell, then click another cell <b>2 cells away</b> in a straight line to place a 3-cell rainbow. Horizontal or vertical only.</div>
+  </div>
+  <div class="grid-wrapper" id="placement-grid-wrapper"></div>
+  <div class="placement-actions">
+    <button id="random-place-btn" class="btn-secondary">🎲 Random Place</button>
+    <button id="confirm-place-btn" class="btn-success" disabled>✅ Confirm</button>
+  </div>
+</div>
+
+<!-- ═══ SCOUT ═══ -->
+<div id="scout-screen" class="screen">
+  <div class="scout-banner">👀 Scout Phase — memorize everyone's rainbows!</div>
+  <div class="scout-sub">Rainbows will move every turn. Watch their direction arrows!</div>
+  <div class="countdown" id="scout-countdown">5</div>
+  <div class="countdown-bar"><div class="countdown-bar-fill" id="countdown-bar-fill" style="width:100%"></div></div>
+  <div class="scout-grids-row" id="scout-grids-row"></div>
+  <button id="scout-ready-btn" class="btn-success" style="margin-top:12px;">Start Playing! 🎮</button>
+</div>
+
+<!-- ═══ PLAY ═══ -->
+<div id="play-screen" class="screen">
+  <div class="turn-banner" id="turn-banner">🎯 <span class="current-player" id="turn-player-name"></span>'s turn</div>
+  <div class="turn-info" id="turn-info"></div>
+  <div class="scores">
+    <div class="score-box" id="score-box-p1">
+      <div class="sname" id="score-p1-name"></div>
+      <div class="sscore" id="score-p1">0</div>
+    </div>
+    <div class="score-box" id="score-box-p2">
+      <div class="sname" id="score-p2-name"></div>
+      <div class="sscore" id="score-p2">0</div>
+    </div>
+  </div>
+  <div class="grid-title" id="target-grid-title"></div>
+  <div class="grid-wrapper" id="play-grid-wrapper"></div>
+  <div class="proximity-hint" id="proximity-hint"></div>
+  <div class="legend">
+    <span><span class="swatch sw-rainbow"></span> Rainbow (revealed on hit)</span>
+    <span><span class="swatch sw-hit"></span> Hit — initials + direction</span>
+    <span><span class="swatch sw-miss"></span> Miss (💧, re-guessable)</span>
+  </div>
+</div>
+
+<!-- ═══ GAME OVER ═══ -->
+<div id="game-over-screen" class="screen">
+  <div class="glass-panel">
+    <h2 style="font-size:2rem;margin-bottom:12px;">🎉 Game Over!</h2>
+    <div class="winner-name" id="winner-text"></div>
+    <div class="final-scores" id="final-scores"></div>
+    <div class="reveal-title">🔍 Final positions revealed:</div>
+    <div class="reveal-grids" id="reveal-grids"></div>
+    <button id="play-again-btn" class="btn-primary">🌈 Play Again</button>
+  </div>
+</div>
+
+<canvas id="confetti-canvas"></canvas>
+<div id="toast"></div>
+<div id="capture-overlay">
+  <div class="capture-text" id="capture-text"></div>
+  <div class="capture-sub" id="capture-sub"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  CONSTANTS & STATE
+// ═══════════════════════════════════════════════════════════════
+const GRID_SIZE = 8;
+const RAINBOW_LEN = 3;
+const SCOUT_SECONDS = 5;
+const MAX_TURNS_PER_PLAYER = 15;
+const DIRS = ['N', 'S', 'E', 'W'];
+const DIR_ARROWS = { N: '↑', S: '↓', E: '→', W: '←' };
+const DIR_VECTORS = { N: [-1, 0], S: [1, 0], E: [0, 1], W: [0, -1] };
+
+const state = {
+  phase: 'setup',
+  players: [],
+  currentPlacer: 0,
+  placementRainbows: [],
+  placingStart: null,
+  currentTurn: 0,
+  numRainbows: 3,
+  turnCount: 0,
+  scoutTimer: null,
+  lastGuess: null,
+  inputLocked: false,
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════
+function getInitials(name) {
+  return name.trim().split(/\s+/).map(function(w) { return w[0] || ''; }).join('.').toUpperCase() + '.';
+}
+function cellKey(r, c) { return r + ',' + c; }
+function colLabel(c) { return String.fromCharCode(65 + c); }
+function rowLabel(r) { return (r + 1).toString(); }
+function oppositeDir(d) { return { N: 'S', S: 'N', E: 'W', W: 'E' }[d]; }
+function randomDir() { return DIRS[Math.floor(Math.random() * DIRS.length)]; }
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  UNIFIED GRID BUILDER
+//  Single CSS grid with (GRID_SIZE+1) × (GRID_SIZE+1) cells.
+//  First row = column labels (A-H), first column = row labels (1-8).
+//  Guarantees perfect alignment.
+// ═══════════════════════════════════════════════════════════════
+function buildGrid(wrapper, onClick) {
+  var el = typeof wrapper === 'string' ? document.getElementById(wrapper) : wrapper;
+  el.innerHTML = '';
+
+  var grid = document.createElement('div');
+  grid.className = 'uni-grid';
+  grid.style.gridTemplateColumns = '22px repeat(' + GRID_SIZE + ', 44px)';
+  grid.style.gridTemplateRows = '22px repeat(' + GRID_SIZE + ', 44px)';
+
+  // Top-left corner
+  var corner = document.createElement('div');
+  corner.className = 'grid-label';
+  grid.appendChild(corner);
+
+  // Column labels
+  for (var c = 0; c < GRID_SIZE; c++) {
+    var cl = document.createElement('div');
+    cl.className = 'grid-label';
+    cl.textContent = colLabel(c);
+    grid.appendChild(cl);
+  }
+
+  // Rows
+  for (var r = 0; r < GRID_SIZE; r++) {
+    // Row label
+    var rl = document.createElement('div');
+    rl.className = 'grid-label';
+    rl.textContent = rowLabel(r);
+    grid.appendChild(rl);
+
+    // Cells
+    for (var cc = 0; cc < GRID_SIZE; cc++) {
+      var cell = document.createElement('div');
+      cell.className = 'grid-cell';
+      cell.dataset.r = r;
+      cell.dataset.c = cc;
+      if (onClick) {
+        cell.addEventListener('click', (function(r2, c2, cell2) {
+          return function() { onClick(r2, c2, cell2); };
+        })(r, cc, cell));
+      } else {
+        cell.classList.add('disabled');
+      }
+      grid.appendChild(cell);
+    }
+  }
+
+  el.appendChild(grid);
+  return grid;
+}
+
+function setCellContent(cell, initials, dirArrow) {
+  cell.innerHTML = '';
+  var content = document.createElement('div');
+  content.className = 'cell-content';
+  var initSpan = document.createElement('span');
+  initSpan.className = 'initials';
+  initSpan.textContent = initials;
+  content.appendChild(initSpan);
+  if (dirArrow) {
+    var arrowSpan = document.createElement('span');
+    arrowSpan.className = 'dir-arrow';
+    arrowSpan.textContent = dirArrow;
+    content.appendChild(arrowSpan);
+  }
+  cell.appendChild(content);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SETUP
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('start-btn').addEventListener('click', function() {
+  var n1 = document.getElementById('p1-name').value.trim() || 'Player 1';
+  var n2 = document.getElementById('p2-name').value.trim() || 'Player 2';
+  state.numRainbows = parseInt(document.getElementById('rainbow-count').value);
+
+  state.players = [
+    { name: n1, initials: getInitials(n1), rainbows: [], hits: new Set(), misses: new Set(), score: 0, hitInfo: {} },
+    { name: n2, initials: getInitials(n2), rainbows: [], hits: new Set(), misses: new Set(), score: 0, hitInfo: {} },
+  ];
+  state.phase = 'placement';
+  state.currentPlacer = 0;
+  state.placementRainbows = [];
+  state.placingStart = null;
+  state.turnCount = 0;
+  state.inputLocked = false;
+
+  showScreen('placement-screen');
+  startPlacement();
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  PLACEMENT  (fix #1: stop at limit, fix #5: no pass screen)
+// ═══════════════════════════════════════════════════════════════
+function startPlacement() {
+  var p = state.players[state.currentPlacer];
+  document.getElementById('placement-player-name').textContent =
+    p.name + ' (' + p.initials + ') — place your rainbows';
+  state.placementRainbows = [];
+  state.placingStart = null;
+  renderPlacementGrid();
+  updateConfirmBtn();
+}
+
+function renderPlacementGrid() {
+  var grid = buildGrid('placement-grid-wrapper', function(r, c) { handlePlacementClick(r, c); });
+  var placed = new Set(state.placementRainbows.flat().map(function(rc) { return cellKey(rc[0], rc[1]); }));
+  var p = state.players[state.currentPlacer];
+  grid.querySelectorAll('.grid-cell').forEach(function(cell) {
+    var r = +cell.dataset.r, c = +cell.dataset.c;
+    if (placed.has(cellKey(r, c))) {
+      cell.classList.add('rainbow');
+      setCellContent(cell, p.initials, null);
+    }
+  });
+  if (state.placingStart) {
+    var sr = state.placingStart[0], sc = state.placingStart[1];
+    var sc2 = grid.querySelector('[data-r="' + sr + '"][data-c="' + sc + '"]');
+    if (sc2) { sc2.classList.add('placing'); sc2.textContent = '?'; }
+  }
+}
+
+function handlePlacementClick(r, c) {
+  // FIX #1: Stop if already at the rainbow limit
+  if (state.placementRainbows.length >= state.numRainbows) return;
+
+  var placed = new Set(state.placementRainbows.flat().map(function(rc) { return cellKey(rc[0], rc[1]); }));
+  if (placed.has(cellKey(r, c))) return;
+
+  if (state.placingStart === null) {
+    state.placingStart = [r, c];
+    renderPlacementGrid();
+  } else {
+    var sr = state.placingStart[0], sc = state.placingStart[1];
+    var cells = null;
+
+    if (sr === r && Math.abs(c - sc) === RAINBOW_LEN - 1) {
+      var minC = Math.min(sc, c);
+      cells = [];
+      for (var i = 0; i < RAINBOW_LEN; i++) cells.push([sr, minC + i]);
+    } else if (sc === c && Math.abs(r - sr) === RAINBOW_LEN - 1) {
+      var minR = Math.min(sr, r);
+      cells = [];
+      for (var i2 = 0; i2 < RAINBOW_LEN; i2++) cells.push([minR + i2, sc]);
+    }
+
+    if (!cells || cells.some(function(rc) { return placed.has(cellKey(rc[0], rc[1])); })) {
+      state.placingStart = null;
+      renderPlacementGrid();
+      return;
+    }
+
+    state.placementRainbows.push(cells);
+    state.placingStart = null;
+    renderPlacementGrid();
+    updateConfirmBtn();
+
+    // FIX #1: If we've reached the limit, clear the start and re-render to disable further clicks
+    if (state.placementRainbows.length >= state.numRainbows) {
+      state.placingStart = null;
+      renderPlacementGrid();
+    }
+  }
+}
+
+function updateConfirmBtn() {
+  var btn = document.getElementById('confirm-place-btn');
+  btn.disabled = state.placementRainbows.length < state.numRainbows;
+  btn.textContent = state.placementRainbows.length < state.numRainbows
+    ? 'Place ' + state.placementRainbows.length + '/' + state.numRainbows + '…'
+    : '✅ Confirm';
+}
+
+document.getElementById('random-place-btn').addEventListener('click', function() {
+  state.placementRainbows = randomRainbows(state.numRainbows);
+  state.placingStart = null;
+  renderPlacementGrid();
+  updateConfirmBtn();
+});
+
+function randomRainbows(count) {
+  var result = [];
+  var occupied = new Set();
+  var attempts = 0;
+  while (result.length < count && attempts < 2000) {
+    attempts++;
+    var horiz = Math.random() < 0.5;
+    var r, c;
+    if (horiz) {
+      r = Math.floor(Math.random() * GRID_SIZE);
+      c = Math.floor(Math.random() * (GRID_SIZE - RAINBOW_LEN + 1));
+    } else {
+      r = Math.floor(Math.random() * (GRID_SIZE - RAINBOW_LEN + 1));
+      c = Math.floor(Math.random() * GRID_SIZE);
+    }
+    var cells = [];
+    for (var i = 0; i < RAINBOW_LEN; i++) {
+      var cr = horiz ? r : r + i;
+      var cc = horiz ? c + i : c;
+      if (occupied.has(cellKey(cr, cc))) { cells.length = 0; break; }
+      cells.push([cr, cc]);
+    }
+    if (cells.length === RAINBOW_LEN) {
+      cells.forEach(function(rc) { occupied.add(cellKey(rc[0], rc[1])); });
+      result.push(cells);
+    }
+  }
+  return result;
+}
+
+document.getElementById('confirm-place-btn').addEventListener('click', function() {
+  if (state.placementRainbows.length < state.numRainbows) return;
+  var p = state.players[state.currentPlacer];
+  p.rainbows = state.placementRainbows.map(function(cells) {
+    return {
+      cells: cells.map(function(rc) { return [rc[0], rc[1]]; }),
+      direction: randomDir(),
+      alive: cells.map(function() { return true; }),
+    };
+  });
+
+  state.currentPlacer++;
+  if (state.currentPlacer < state.players.length) {
+    // FIX #5: No pass screen — just switch directly
+    startPlacement();
+  } else {
+    state.phase = 'scout';
+    startScout();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  SCOUT PHASE  (fix #5: show both players' rainbows at once)
+// ═══════════════════════════════════════════════════════════════
+function startScout() {
+  showScreen('scout-screen');
+
+  var container = document.getElementById('scout-grids-row');
+  container.innerHTML = '';
+
+  state.players.forEach(function(player, idx) {
+    var block = document.createElement('div');
+    block.className = 'scout-grid-block';
+
+    var title = document.createElement('div');
+    title.className = 'sg-title';
+    title.textContent = player.name + "'s rainbows (" + player.initials + ')';
+    block.appendChild(title);
+
+    var wrapper = document.createElement('div');
+    wrapper.className = 'grid-wrapper';
+    block.appendChild(wrapper);
+    container.appendChild(block);
+
+    var grid = buildGrid(wrapper, null);
+    grid.querySelectorAll('.grid-cell').forEach(function(cell) {
+      var r = +cell.dataset.r, c = +cell.dataset.c;
+      player.rainbows.forEach(function(rb) {
+        rb.cells.forEach(function(rc, i) {
+          if (rc[0] === r && rc[1] === c && rb.alive[i]) {
+            cell.classList.add('rainbow');
+            setCellContent(cell, player.initials, DIR_ARROWS[rb.direction]);
+          }
+        });
+      });
+    });
+  });
+
+  var remaining = SCOUT_SECONDS;
+  var countdownEl = document.getElementById('scout-countdown');
+  var barFill = document.getElementById('countdown-bar-fill');
+  countdownEl.textContent = remaining;
+  barFill.style.width = '100%';
+
+  if (state.scoutTimer) clearInterval(state.scoutTimer);
+  state.scoutTimer = setInterval(function() {
+    remaining--;
+    countdownEl.textContent = remaining;
+    barFill.style.width = (remaining / SCOUT_SECONDS * 100) + '%';
+    if (remaining <= 0) {
+      clearInterval(state.scoutTimer);
+      state.scoutTimer = null;
+      proceedFromScout();
+    }
+  }, 1000);
+}
+
+document.getElementById('scout-ready-btn').addEventListener('click', function() {
+  if (state.scoutTimer) { clearInterval(state.scoutTimer); state.scoutTimer = null; }
+  proceedFromScout();
+});
+
+function proceedFromScout() {
+  state.phase = 'play';
+  state.currentTurn = 0;
+  state.turnCount = 0;
+  startPlay();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PLAY  (fix #3: lock input, fix #5: no pass screen)
+// ═══════════════════════════════════════════════════════════════
+function startPlay() {
+  showScreen('play-screen');
+  document.getElementById('score-p1-name').textContent = state.players[0].initials;
+  document.getElementById('score-p2-name').textContent = state.players[1].initials;
+  document.getElementById('score-p1').textContent = '0';
+  document.getElementById('score-p2').textContent = '0';
+  renderPlayGrid();
+}
+
+function updateTurnIndicator() {
+  var banner = document.getElementById('turn-banner');
+  var box1 = document.getElementById('score-box-p1');
+  var box2 = document.getElementById('score-box-p2');
+  banner.classList.remove('p1-turn', 'p2-turn');
+  box1.classList.remove('active-p1', 'active-p2');
+  box2.classList.remove('active-p1', 'active-p2');
+  if (state.currentTurn === 0) {
+    banner.classList.add('p1-turn');
+    box1.classList.add('active-p1');
+  } else {
+    banner.classList.add('p2-turn');
+    box2.classList.add('active-p2');
+  }
+}
+
+function renderPlayGrid() {
+  var attacker = state.players[state.currentTurn];
+  var defender = state.players[1 - state.currentTurn];
+
+  document.getElementById('turn-player-name').textContent = attacker.name;
+  var roundNum = Math.floor(state.turnCount / 2) + 1;
+  document.getElementById('turn-info').textContent =
+    'Round ' + roundNum + ' of ' + MAX_TURNS_PER_PLAYER;
+  document.getElementById('target-grid-title').textContent =
+    "Guess where " + defender.name + "'s rainbows are hiding";
+
+  updateTurnIndicator();
+
+  var hintEl = document.getElementById('proximity-hint');
+  hintEl.textContent = '';
+  hintEl.style.color = '#fff';
+
+  state.inputLocked = false; // unlock for new turn
+
+  var grid = buildGrid('play-grid-wrapper', function(r, c, cell) { handleGuess(r, c, cell); });
+
+  grid.querySelectorAll('.grid-cell').forEach(function(cell) {
+    var r = +cell.dataset.r, c = +cell.dataset.c;
+    var key = cellKey(r, c);
+    if (defender.hits.has(key)) {
+      cell.classList.add('hit', 'disabled');
+      var hitInfo = defender.hitInfo[key];
+      var arrow = hitInfo ? DIR_ARROWS[hitInfo.direction] : null;
+      setCellContent(cell, defender.initials, arrow);
+    } else if (defender.misses.has(key)) {
+      cell.classList.add('miss', 'reguessable');
+    }
+  });
+
+  if (state.lastGuess) {
+    var lg = grid.querySelector('[data-r="' + state.lastGuess.r + '"][data-c="' + state.lastGuess.c + '"]');
+    if (lg) lg.classList.add('last-guess');
+  }
+}
+
+function handleGuess(r, c, cell) {
+  // FIX #3: Lock input immediately on first click
+  if (state.inputLocked) return;
+  state.inputLocked = true;
+  var wasHit = false;
+  var wasCapture = false;
+
+  var attacker = state.players[state.currentTurn];
+  var defender = state.players[1 - state.currentTurn];
+  var key = cellKey(r, c);
+
+  if (defender.hits.has(key)) { state.inputLocked = false; return; }
+
+  state.lastGuess = { r: r, c: c };
+
+  // Check hit
+  var hitRainbowIdx = -1;
+  var hitCellIdx = -1;
+  defender.rainbows.forEach(function(rb, ri) {
+    rb.cells.forEach(function(rc, ci) {
+      if (rc[0] === r && rc[1] === c && rb.alive[ci]) {
+        hitRainbowIdx = ri;
+        hitCellIdx = ci;
+      }
+    });
+  });
+
+  if (hitRainbowIdx >= 0) {
+    // HIT
+    var rb = defender.rainbows[hitRainbowIdx];
+    rb.alive[hitCellIdx] = false;
+    defender.hits.add(key);
+    defender.hitInfo[key] = { direction: rb.direction };
+    attacker.score++;
+    wasHit = true;
+
+    cell.classList.remove('miss', 'reguessable');
+    cell.classList.add('hit', 'disabled', 'last-guess');
+    setCellContent(cell, defender.initials, DIR_ARROWS[rb.direction]);
+
+    var rect = cell.getBoundingClientRect();
+    confettiBurst(rect.left + rect.width / 2, rect.top + rect.height / 2);
+
+    document.getElementById(state.currentTurn === 0 ? 'score-p1' : 'score-p2').textContent = attacker.score;
+
+    var aliveCount = rb.alive.filter(function(a) { return a; }).length;
+    if (aliveCount === 0) {
+      wasCapture = true;
+      showCaptureCelebration("Captured " + defender.name + "'s rainbow!");
+    }
+
+    var totalAlive = defender.rainbows.reduce(function(sum, rb2) {
+      return sum + rb2.alive.filter(function(a) { return a; }).length;
+    }, 0);
+
+    var hintEl = document.getElementById('proximity-hint');
+    hintEl.textContent = '🎯 HIT! Guess again!';
+    hintEl.style.color = '#ff5555';
+
+    if (totalAlive === 0) {
+      setTimeout(function() { endGame(); }, 1000);
+      return;
+    }
+  } else {
+    // MISS
+    defender.misses.add(key);
+    cell.classList.remove('reguessable');
+    cell.classList.add('miss', 'last-guess');
+
+    var dist = minDistanceToAlive(r, c, defender);
+    var hintEl2 = document.getElementById('proximity-hint');
+    if (dist <= 1) { hintEl2.textContent = '🔥🔥 BLAZING!'; hintEl2.style.color = '#ff4444'; }
+    else if (dist <= 2) { hintEl2.textContent = '🔥 HOT!'; hintEl2.style.color = '#ff8c00'; }
+    else if (dist <= 4) { hintEl2.textContent = '🌡️ WARM'; hintEl2.style.color = '#ffd700'; }
+    else { hintEl2.textContent = '❄️ COLD'; hintEl2.style.color = '#5588cc'; }
+  }
+
+  // Hit → go again (no turn switch, no rainbow movement)
+  // Miss → switch turns, move rainbows
+  setTimeout(function() {
+    if (wasHit) {
+      // Same player goes again — just re-render and unlock
+      renderPlayGrid();
+    } else {
+      state.turnCount++;
+      state.currentTurn = 1 - state.currentTurn;
+
+      // Move the new defender's rainbows before their guess
+      if (state.turnCount >= 1) {
+        movePlayerRainbows(state.players[1 - state.currentTurn]);
+      }
+
+      // Check turn limit
+      if (state.turnCount >= MAX_TURNS_PER_PLAYER * 2) {
+        endGame();
+        return;
+      }
+
+      renderPlayGrid();
+    }
+  }, wasCapture ? 2000 : (wasHit ? 1000 : 1400));
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MOVEMENT
+// ═══════════════════════════════════════════════════════════════
+function movePlayerRainbows(player) {
+  player.rainbows.forEach(function(rb) {
+    // Damaged rainbows can't move — they're stuck in place
+    var hasDeadCells = rb.alive.some(function(a) { return !a; });
+    if (hasDeadCells) return;
+
+    if (Math.random() < 0.25) {
+      rb.direction = randomDir();
+    }
+    var tryMove = function(dir) {
+      var dv = DIR_VECTORS[dir];
+      return rb.cells.map(function(cell, i) {
+        if (!rb.alive[i]) return cell;
+        return [cell[0] + dv[0], cell[1] + dv[1]];
+      });
+    };
+    var inBounds = function(cells) {
+      return cells.every(function(rc, i) {
+        return !rb.alive[i] || (rc[0] >= 0 && rc[0] < GRID_SIZE && rc[1] >= 0 && rc[1] < GRID_SIZE);
+      });
+    };
+
+    var newCells = tryMove(rb.direction);
+    if (inBounds(newCells)) {
+      rb.cells = newCells;
+    } else {
+      rb.direction = oppositeDir(rb.direction);
+      newCells = tryMove(rb.direction);
+      if (inBounds(newCells)) {
+        rb.cells = newCells;
+      }
+    }
+  });
+}
+
+function minDistanceToAlive(gr, gc, player) {
+  var min = Infinity;
+  player.rainbows.forEach(function(rb) {
+    rb.cells.forEach(function(rc, i) {
+      if (rb.alive[i]) {
+        var d = Math.abs(rc[0] - gr) + Math.abs(rc[1] - gc);
+        if (d < min) min = d;
+      }
+    });
+  });
+  return min === Infinity ? 999 : min;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONFETTI
+// ═══════════════════════════════════════════════════════════════
+function confettiBurst(cx, cy) {
+  var canvas = document.getElementById('confetti-canvas');
+  var ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  var colors = ['#ff0080', '#ff8c00', '#ffd700', '#00d26a', '#00bfff', '#8a2be2'];
+  var particles = [];
+  for (var i = 0; i < 60; i++) {
+    var angle = (Math.PI * 2 * i) / 60 + Math.random() * 0.5;
+    var speed = 4 + Math.random() * 8;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: 3 + Math.random() * 5, life: 1,
+      rot: Math.random() * Math.PI, vrot: (Math.random() - 0.5) * 0.3,
+    });
+  }
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var alive = false;
+    particles.forEach(function(p) {
+      if (p.life > 0) {
+        alive = true;
+        p.x += p.vx; p.y += p.vy; p.vy += 0.35; p.vx *= 0.99;
+        p.life -= 0.015; p.rot += p.vrot;
+        ctx.save();
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+        ctx.restore();
+      }
+    });
+    if (alive) requestAnimationFrame(animate);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  animate();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════════
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(function() { t.style.display = 'none'; }, 2500);
+}
+
+function showCaptureCelebration(msg) {
+  var overlay = document.getElementById('capture-overlay');
+  document.getElementById('capture-text').textContent = '🌈';
+  document.getElementById('capture-sub').textContent = msg;
+  overlay.style.display = 'flex';
+  confettiBurst(window.innerWidth / 2, window.innerHeight / 2);
+  confettiBurst(window.innerWidth / 2 - 120, window.innerHeight / 2);
+  confettiBurst(window.innerWidth / 2 + 120, window.innerHeight / 2);
+  setTimeout(function() { overlay.style.display = 'none'; }, 2000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GAME OVER  (fix #2: also ends on turn limit)
+// ═══════════════════════════════════════════════════════════════
+function endGame() {
+  state.phase = 'gameover';
+  state.inputLocked = true;
+  var p1 = state.players[0], p2 = state.players[1];
+  var winnerText;
+  if (p1.score > p2.score) {
+    winnerText = '🏆 ' + p1.name + ' (' + p1.initials + ') wins!';
+  } else if (p2.score > p1.score) {
+    winnerText = '🏆 ' + p2.name + ' (' + p2.initials + ') wins!';
+  } else {
+    winnerText = '🤝 It\'s a tie!';
+  }
+  document.getElementById('winner-text').textContent = winnerText;
+  document.getElementById('final-scores').innerHTML =
+    '<div class="score-box"><div class="sname">' + p1.initials + '</div><div class="sscore">' + p1.score + '</div></div>' +
+    '<div class="score-box"><div class="sname">' + p2.initials + '</div><div class="sscore">' + p2.score + '</div></div>';
+
+  var revealContainer = document.getElementById('reveal-grids');
+  revealContainer.innerHTML = '';
+
+  state.players.forEach(function(player, idx) {
+    var block = document.createElement('div');
+    block.className = 'reveal-grid-block';
+
+    var title = document.createElement('div');
+    title.className = 'rg-title';
+    title.textContent = player.name + "'s rainbows";
+    block.appendChild(title);
+
+    var wrapper = document.createElement('div');
+    wrapper.className = 'grid-wrapper';
+    block.appendChild(wrapper);
+    revealContainer.appendChild(block);
+
+    var grid = buildGrid(wrapper, null);
+    grid.querySelectorAll('.grid-cell').forEach(function(cell) {
+      var r = +cell.dataset.r, c = +cell.dataset.c;
+      var key = cellKey(r, c);
+      var found = false;
+      player.rainbows.forEach(function(rb) {
+        rb.cells.forEach(function(rc, i) {
+          if (rc[0] === r && rc[1] === c) {
+            found = true;
+            if (rb.alive[i]) {
+              cell.classList.add('rainbow');
+              setCellContent(cell, player.initials, DIR_ARROWS[rb.direction]);
+            } else {
+              cell.classList.add('hit', 'disabled');
+              var hitInfo = player.hitInfo[key];
+              var arrow = hitInfo ? DIR_ARROWS[hitInfo.direction] : null;
+              setCellContent(cell, player.initials, arrow);
+            }
+          }
+        });
+      });
+      if (!found) {
+        var opponent = state.players[1 - idx];
+        if (opponent.misses.has(key)) {
+          cell.classList.add('miss', 'disabled');
+        }
+      }
+    });
+  });
+
+  showScreen('game-over-screen');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PLAY AGAIN
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('play-again-btn').addEventListener('click', function() {
+  state.phase = 'setup';
+  state.players = [];
+  state.currentPlacer = 0;
+  state.placementRainbows = [];
+  state.placingStart = null;
+  state.currentTurn = 0;
+  state.turnCount = 0;
+  state.lastGuess = null;
+  state.inputLocked = false;
+  document.getElementById('p1-name').value = '';
+  document.getElementById('p2-name').value = '';
+  showScreen('setup-screen');
+});
+
+window.addEventListener('resize', function() {
+  var canvas = document.getElementById('confetti-canvas');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
