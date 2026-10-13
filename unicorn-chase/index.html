@@ -87,7 +87,7 @@
       <h2>Unicorn Chase!</h2>
       <p>The rainbow unicorn is on the loose. Catch her!</p>
       <div class="controls">
-        <b>← →</b> or <b>A D</b> to run &nbsp;•&nbsp; <b>↑</b> / <b>W</b> / <b>Space</b> to jump
+        <b>← →</b> or <b>A D</b> to run &nbsp;•&nbsp; <b>↑</b> / <b>W</b> / <b>Space</b> to jump &nbsp;•&nbsp; ⚡ glowing arrows = speed boost
       </div><br>
       <button class="btn-primary" id="startBtn">Start chasing!</button>
     </div>
@@ -131,31 +131,23 @@ cvs.width = W * dpr; cvs.height = H * dpr;
 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
 const GRAV = 0.55, JUMP = -13.4, PSPEED = 4.3;
+const BOOST = 8.5, BOOST_T = 50, ARROW_WAIT = 480; // boost: px/frame, frames, respawn frames
 const RAINBOW = ['#ff3b6b', '#ff9f1c', '#ffe14d', '#3ddc68', '#3ba7ff', '#b96bff'];
+// unicorn flee speed ramps past the player's 4.3 — level 3 needs boosts (and graze timing) to catch her
 const LEVELS = [
-  { speed: 3.55, panic: 230, grazeMin: .7, grazeMax: 1.2, everyMin: 2.2, everyMax: 4.0, plats: [
-    { x: 0, y: GROUND_Y, w: W, ground: true },
-    { x: 130, y: 390, w: 190 },
-    { x: 640, y: 390, w: 190 },
-  ]},
-  { speed: 3.85, panic: 250, grazeMin: .6, grazeMax: 1.05, everyMin: 2.4, everyMax: 4.2, plats: [
-    { x: 0, y: GROUND_Y, w: W, ground: true },
-    { x: 90, y: 395, w: 170 },
-    { x: 300, y: 290, w: 160 },
-    { x: 510, y: 395, w: 150 },
-    { x: 710, y: 290, w: 160 },
-  ]},
-  { speed: 4.05, panic: 270, grazeMin: .55, grazeMax: .95, everyMin: 2.6, everyMax: 4.4, plats: [
-    { x: 0, y: GROUND_Y, w: W, ground: true },
-    { x: 60, y: 390, w: 140 },
-    { x: 250, y: 285, w: 150 },
-    { x: 450, y: 390, w: 140 },
-    { x: 640, y: 285, w: 150 },
-    { x: 810, y: 390, w: 120 },
-  ]},
+  { worldW: 2000, speed: 3.4, panic: 240, grazeMin: .7,  grazeMax: 1.2,  everyMin: 2.0, everyMax: 3.6 },
+  { worldW: 2600, speed: 4.3, panic: 270, grazeMin: .6,  grazeMax: 1.05, everyMin: 2.4, everyMax: 4.2 },
+  { worldW: 3200, speed: 4.9, panic: 300, grazeMin: .5,  grazeMax: .9,   everyMin: 2.8, everyMax: 4.8 },
 ];
-const FLOWERS = [100, 275, 505, 705, 875];
 const rand = (a, b) => a + Math.random() * (b - a);
+
+// alternating two-tier platforms across the world (300px steps land inside the jump arc)
+function genPlats(worldW) {
+  const out = [{ x: 0, y: GROUND_Y, w: worldW, ground: true }];
+  for (let x = 150, i = 0; x < worldW - 230; x += 300, i++)
+    out.push({ x, y: i % 2 ? 300 : 390, w: 185 - (i % 3) * 15 });
+  return out;
+}
 
 function makeEnt(x, y, w, h) {
   return { x, y, w, h, vx: 0, vy: 0, facing: 1, grounded: false, animT: 0, atWall: false };
@@ -163,10 +155,12 @@ function makeEnt(x, y, w, h) {
 const player = makeEnt(90, GROUND_Y - 38, 26, 38);
 const uni = makeEnt(730, GROUND_Y - 46, 58, 46);
 Object.assign(uni, { grazing: false, grazeLeft: 0, grazeT: 0, wanderT: 0, walking: true, wdir: 1, fleeing: false, crossing: false });
+Object.assign(player, { boostT: 0, boostDir: 1 });
 
-let level = 0, plats = LEVELS[0].plats, state = 'start';
+let level = 0, plats = genPlats(LEVELS[0].worldW), state = 'start';
+let worldW = LEVELS[0].worldW, camX = 0, skyW = W, tick = 0;
+let arrows = [], flowers = [], clouds = [];
 const sparkles = [];
-const clouds = [{ x: 120, y: 70, s: 1 }, { x: 430, y: 115, s: .7 }, { x: 760, y: 55, s: 1.2 }];
 
 const hudEl = document.getElementById('hud');
 const startOv = document.getElementById('startOv');
@@ -175,14 +169,29 @@ const winOv = document.getElementById('winOv');
 const nextLvText = document.getElementById('nextLvText');
 
 function loadLevel(i) {
-  level = i; plats = LEVELS[i].plats;
-  Object.assign(player, { x: 90, y: GROUND_Y - 38, vx: 0, vy: 0, facing: 1, grounded: true, animT: 0 });
+  level = i;
+  const L = LEVELS[i];
+  worldW = L.worldW; plats = genPlats(worldW);
+  skyW = (worldW - W) * 0.4 + W; // cloud band width at 0.4 parallax
+  clouds = Array.from({ length: 8 }, (_, j) => ({
+    x: (j * skyW) / 8 + (j * 53) % 90, y: 45 + (j * 67) % 110, s: .6 + (j % 3) * .25,
+  }));
+  flowers = [];
+  for (let x = 60; x < worldW; x += 180) flowers.push(x + (x * 37) % 70);
+  arrows = [];
+  for (let x = 430, j = 0; x < worldW - 240; x += 620, j++)
+    arrows.push({ x, dir: j % 2 ? -1 : 1, active: true, respawnT: 0 });
+  Object.assign(player, {
+    x: 90, y: GROUND_Y - 38, vx: 0, vy: 0, facing: 1, grounded: true, animT: 0,
+    boostT: 0, boostDir: 1,
+  });
   Object.assign(uni, {
     x: 730, y: GROUND_Y - 46, vx: 0, vy: 0, facing: -1, grounded: true, animT: 0,
     grazing: false, fleeing: false, crossing: false, grazeLeft: 0,
     grazeT: rand(60, 180), wanderT: rand(60, 180), walking: true, wdir: 1,
   });
   sparkles.length = 0;
+  camX = Math.max(0, Math.min(player.x + player.w / 2 - W / 2, worldW - W));
   hudEl.textContent = `Level ${i + 1} of ${LEVELS.length}`;
 }
 
@@ -206,7 +215,7 @@ function physics(e, k) {
   e.x += e.vx * k; e.y += e.vy * k;
   e.atWall = false;
   if (e.x < 2) { e.x = 2; e.atWall = true; }
-  if (e.x + e.w > W - 2) { e.x = W - e.w - 2; e.atWall = true; }
+  if (e.x + e.w > worldW - 2) { e.x = worldW - e.w - 2; e.atWall = true; }
   e.grounded = false;
   if (e.vy >= 0) {
     for (const p of plats) {
@@ -220,8 +229,19 @@ function physics(e, k) {
 function updatePlayer(k) {
   const L = keys.ArrowLeft || keys.a, R = keys.ArrowRight || keys.d;
   const J = keys.ArrowUp || keys.w || keys[' '];
-  player.vx = (R ? PSPEED : 0) - (L ? PSPEED : 0);
-  if (player.vx) player.facing = player.vx > 0 ? 1 : -1;
+  if (player.boostT > 0) {
+    player.boostT -= k;
+    player.vx = player.boostDir * BOOST;
+    player.facing = player.boostDir;
+    if (Math.random() < 0.7 && sparkles.length < 90)
+      sparkles.push({
+        x: player.x + (player.boostDir > 0 ? 2 : player.w - 2),
+        y: player.y + player.h * 0.6, life: 1, col: RAINBOW[tick % 6],
+      });
+  } else {
+    player.vx = (R ? PSPEED : 0) - (L ? PSPEED : 0);
+    if (player.vx) player.facing = player.vx > 0 ? 1 : -1;
+  }
   if (J && player.grounded) player.vy = JUMP;
   if (!J && player.vy < -6) player.vy = -6; // let go early = shorter hop
   physics(player, k);
@@ -236,7 +256,9 @@ function updateUnicorn(k) {
   else if (Math.abs(dist) > L.panic + 130) { uni.fleeing = false; }
   if (uni.grounded) uni.crossing = false;
 
-  if (uni.fleeing && !uni.crossing) {
+  if (uni.crossing) {
+    // mid-leap over the player: hold course until we land
+  } else if (uni.fleeing) {
     uni.facing = dist > 0 ? -1 : 1;
     uni.vx = uni.facing * L.speed;
     if (uni.grounded && uni.atWall) {
@@ -260,23 +282,46 @@ function updateUnicorn(k) {
     uni.grazeT -= k;
     uni.wanderT -= k;
     if (uni.walking) {
+      if (uni.atWall) uni.wdir = -uni.wdir; // don't moonwalk at world edges
       uni.vx = uni.wdir * 0.9; uni.facing = uni.wdir;
       if (uni.grounded && Math.random() < 0.003 * k) uni.vy = JUMP * 0.85;
     } else uni.vx = 0;
-    if (uni.grazeT <= 0) uni.grazing = true;
-    if (uni.grazing) uni.grazeLeft = rand(60 * L.grazeMin, 60 * L.grazeMax);
+    if (uni.grazeT <= 0) {
+      uni.grazing = true;
+      uni.grazeLeft = rand(60 * L.grazeMin, 60 * L.grazeMax);
+    }
   }
   physics(uni, k);
   const moving = Math.abs(uni.vx) > 0.5;
   if (moving) uni.animT += 0.28 * k;
   // sparkle trail while running
-  if (moving && sparkles.length < 60 && Math.random() < 0.5) {
+  if (moving && sparkles.length < 90 && Math.random() < 0.5) {
     sparkles.push({
       x: uni.facing > 0 ? uni.x + 8 : uni.x + uni.w - 8,
       y: uni.y + uni.h * 0.55, life: 1,
       col: RAINBOW[(Math.random() * RAINBOW.length) | 0],
     });
   }
+}
+
+// ── powerups: glowing arrows give a short push in your run direction (arrow's if you're still) ──
+function tryPickups() {
+  const pcx = player.x + player.w / 2, pcy = player.y + player.h / 2;
+  for (const a of arrows) {
+    if (!a.active) continue;
+    if (Math.abs(pcx - a.x) < 30 && Math.abs(pcy - (GROUND_Y - 26)) < 42) {
+      a.active = false; a.respawnT = ARROW_WAIT;
+      player.boostT = BOOST_T;
+      player.boostDir = Math.abs(player.vx) > 0.3 ? Math.sign(player.vx) : a.dir;
+      for (let i = 0; i < 10; i++)
+        sparkles.push({ x: a.x + rand(-14, 14), y: GROUND_Y - 26 + rand(-16, 16), life: 1, col: RAINBOW[i % 6] });
+    }
+  }
+}
+
+function updateCamera(k) {
+  const target = Math.max(0, Math.min(player.x + player.w / 2 - W / 2, worldW - W));
+  camX += (target - camX) * Math.min(1, 0.15 * k);
 }
 
 function updateSparkles(k) {
@@ -301,18 +346,19 @@ function drawSky() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, '#8fd3ff'); g.addColorStop(1, '#e9f8ff');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  // sun
+  // sun (fixed on screen)
   ctx.fillStyle = 'rgba(255,226,122,.35)';
   ctx.beginPath(); ctx.arc(885, 70, 48, 0, 7); ctx.fill();
   ctx.fillStyle = '#ffe27a';
   ctx.beginPath(); ctx.arc(885, 70, 32, 0, 7); ctx.fill();
-  // clouds
+  // clouds (slow parallax)
   ctx.fillStyle = 'rgba(255,255,255,.9)';
   for (const c of clouds) {
+    const dx = (((c.x - camX * 0.4) % skyW) + skyW) % skyW;
     ctx.beginPath();
-    ctx.arc(c.x, c.y, 18 * c.s, 0, 7);
-    ctx.arc(c.x + 22 * c.s, c.y + 4 * c.s, 14 * c.s, 0, 7);
-    ctx.arc(c.x - 20 * c.s, c.y + 6 * c.s, 13 * c.s, 0, 7);
+    ctx.arc(dx, c.y, 18 * c.s, 0, 7);
+    ctx.arc(dx + 22 * c.s, c.y + 4 * c.s, 14 * c.s, 0, 7);
+    ctx.arc(dx - 20 * c.s, c.y + 6 * c.s, 13 * c.s, 0, 7);
     ctx.fill();
   }
 }
@@ -332,7 +378,7 @@ function drawPlatforms() {
     }
   }
   // flowers on the ground
-  for (const fx of FLOWERS) {
+  for (const fx of flowers) {
     ctx.strokeStyle = '#3d9e3d'; ctx.lineWidth = 2;
     line(fx, GROUND_Y, fx, GROUND_Y - 14);
     ctx.fillStyle = '#ff8ac2';
@@ -342,6 +388,26 @@ function drawPlatforms() {
     }
     ctx.fillStyle = '#ffd700';
     ctx.beginPath(); ctx.arc(fx, GROUND_Y - 14, 2.6, 0, 7); ctx.fill();
+  }
+}
+
+function drawArrows() {
+  const t = performance.now() / 1000;
+  for (const a of arrows) {
+    if (!a.active) continue;
+    const pulse = 0.7 + 0.3 * Math.sin(t * 5 + a.x);
+    ctx.save();
+    ctx.translate(a.x, GROUND_Y - 26);
+    ctx.scale(a.dir, 1);
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = '#4de0ff';
+    ctx.shadowColor = '#4de0ff';
+    ctx.shadowBlur = 16;
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-10, -13); ctx.lineTo(1, 0); ctx.lineTo(-10, 13); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(3, -13); ctx.lineTo(14, 0); ctx.lineTo(3, 13); ctx.stroke();
+    ctx.restore();
   }
 }
 
@@ -449,12 +515,30 @@ function drawUnicorn(u) {
   ctx.restore();
 }
 
+// which way did she go? tiny edge hint when she's off-screen
+function drawOffscreenHint() {
+  if (state !== 'play') return;
+  let hx;
+  if (uni.x + uni.w < camX) hx = 30;
+  else if (uni.x > camX + W) hx = W - 30;
+  else return;
+  ctx.font = '24px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const bob = Math.sin(performance.now() / 220) * 5;
+  ctx.fillText('🦄', hx, H / 2 + bob);
+}
+
 function draw() {
   drawSky();
+  ctx.save();
+  ctx.translate(-camX, 0);
   drawPlatforms();
   drawSparkles();
+  drawArrows();
   drawUnicorn(uni);
   drawPlayer(player);
+  ctx.restore();
+  drawOffscreenHint();
 }
 
 // ── game flow ──
@@ -472,15 +556,27 @@ document.getElementById('startBtn').onclick = () => { startOv.hidden = true; sta
 document.getElementById('nextBtn').onclick = () => { clearOv.hidden = true; loadLevel(level + 1); state = 'play'; };
 document.getElementById('againBtn').onclick = () => { winOv.hidden = true; loadLevel(0); state = 'play'; };
 
+// debug handle for smoke tests
+window.__uc = {
+  player, uni,
+  get arrows() { return arrows; },
+  getState: () => state, setState: v => state = v,
+  cam: () => camX, world: () => worldW, lvl: () => level,
+};
+
 loadLevel(0);
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(now - last, 50); last = now;
   const k = dt / 16.667; // frame-units at 60fps
-  for (const c of clouds) { c.x += c.s * 0.12 * k; if (c.x > W + 80) c.x = -80; }
+  tick++;
+  for (const c of clouds) { c.x += c.s * 0.12 * k; if (c.x > skyW + 60) c.x = -60; }
+  for (const a of arrows) if (!a.active && (a.respawnT -= k) <= 0) a.active = true;
   if (state === 'play') {
     updatePlayer(k);
     updateUnicorn(k);
+    tryPickups();
+    updateCamera(k);
     if (overlap(player, uni, 8)) onCatch();
   }
   updateSparkles(k);
