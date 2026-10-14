@@ -1021,6 +1021,7 @@ function onCatch() {
 }
 
 function startGame() {
+  startOv.hidden = true;
   hearts = MAX_HEARTS;
   loadLevel(0);
   state = 'play';
