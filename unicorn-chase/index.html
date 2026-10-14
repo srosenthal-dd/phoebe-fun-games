@@ -61,6 +61,7 @@
     padding: 8px 16px; margin-bottom: 16px; font-size: .82rem; color: #aab;
   }
   .panel .controls b { color: #fff; }
+  .panel .best { color: #ffd700; font-weight: 700; }
   .btn-primary {
     padding: 13px 34px; border: none; border-radius: 10px;
     font-size: 1.05rem; font-weight: 700; cursor: pointer;
@@ -118,8 +119,10 @@
         <canvas id="preview" width="130" height="110"></canvas>
       </div>
       <div class="controls">
-        <b>← →</b> or <b>A D</b> to run &nbsp;•&nbsp; <b>↑</b> / <b>W</b> / <b>Space</b> to jump &nbsp;•&nbsp; ⚡ arrows boost you their way
+        <b>← →</b> or <b>A D</b> to run &nbsp;•&nbsp; <b>↑</b> / <b>W</b> / <b>Space</b> to jump<br>
+        ⚡ arrows boost you their way &nbsp;•&nbsp; ❤ dodge pits and spikes!
       </div><br>
+      <p class="best" id="bestLine"></p>
       <button class="btn-primary" id="startBtn">Start chasing!</button>
     </div>
   </div>
@@ -138,7 +141,17 @@
       <div class="big">🏆</div>
       <h2>You win!</h2>
       <p>You caught the unicorn in every level. 🌈</p>
+      <p class="best" id="winStats"></p>
       <button class="btn-primary" id="againBtn">Play again</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="overOv" hidden>
+    <div class="panel">
+      <div class="big">💔</div>
+      <h2>Out of hearts!</h2>
+      <p>The unicorn got away... back to Level 1!</p>
+      <button class="btn-primary" id="retryBtn">Try again</button>
     </div>
   </div>
 </div>
@@ -163,50 +176,68 @@ ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
 const GRAV = 0.55, JUMP = -13.4, PSPEED = 4.3;
 const BOOST = 8.5, BOOST_T = 50, ARROW_WAIT = 480; // boost: px/frame, frames, respawn frames
+const MAX_HEARTS = 5;
 const RAINBOW = ['#ff3b6b', '#ff9f1c', '#ffe14d', '#3ddc68', '#3ba7ff', '#b96bff'];
 const rand = (a, b) => a + Math.random() * (b - a);
 
-// ── themes ──
+// ── themes (spike = obstacle color) ──
 const THEMES = {
-  meadow:  { skyA: '#8fd3ff', skyB: '#e9f8ff', top: '#58c24f', top2: '#3f9c37', dirt: '#8a5a35', sun: '#ffe27a', decor: 'flowers' },
-  sunset:  { skyA: '#ff9a5c', skyB: '#ffedd2', top: '#a8c24f', top2: '#7f9c37', dirt: '#7a4a2d', sun: '#ff6b4a', decor: 'flowers' },
-  forest:  { skyA: '#9fd0a9', skyB: '#d8f2dc', top: '#2f9e44', top2: '#1f7a33', dirt: '#5d4023', sun: '#ffe27a', decor: 'trees' },
-  snow:    { skyA: '#bfe3ff', skyB: '#f2faff', top: '#ffffff', top2: '#c9e2f2', dirt: '#9fb8c8', sun: '#fff2b0', decor: 'snowfall' },
-  night:   { skyA: '#0d1b3d', skyB: '#27406e', top: '#2e6640', top2: '#1f4a30', dirt: '#2d2440', moon: true, decor: 'stars' },
-  beach:   { skyA: '#7ecbff', skyB: '#e6f7ff', top: '#f0d894', top2: '#d9bc76', dirt: '#cfb070', sun: '#ffcf5a', decor: 'shells' },
-  tower:   { skyA: '#8fa8ff', skyB: '#ffd9e8', top: '#58c24f', top2: '#3f9c37', dirt: '#8a5a35', sun: '#ffb04a', decor: 'flowers' },
-  crystal: { skyA: '#1c1233', skyB: '#3d2f63', top: '#8f6fd8', top2: '#6b4fb0', dirt: '#3b2d55', decor: 'crystals' },
-  volcano: { skyA: '#2d1015', skyB: '#7a2d1a', top: '#6e5147', top2: '#4a332c', dirt: '#3d2620', decor: 'embers' },
-  rainbow: { skyA: null, top: '#ffd1e8', top2: '#f0a8cf', dirt: '#b59ab0', sun: '#fff2b0', decor: 'arches' }, // skyA null = rainbow gradient sky
+  meadow:  { skyA: '#8fd3ff', skyB: '#e9f8ff', top: '#58c24f', top2: '#3f9c37', dirt: '#8a5a35', sun: '#ffe27a', decor: 'flowers', spike: '#4a7a2f' },
+  sunset:  { skyA: '#ff9a5c', skyB: '#ffedd2', top: '#a8c24f', top2: '#7f9c37', dirt: '#7a4a2d', sun: '#ff6b4a', decor: 'flowers', spike: '#8a6a3a' },
+  forest:  { skyA: '#9fd0a9', skyB: '#d8f2dc', top: '#2f9e44', top2: '#1f7a33', dirt: '#5d4023', sun: '#ffe27a', decor: 'trees', spike: '#2f6e44' },
+  snow:    { skyA: '#bfe3ff', skyB: '#f2faff', top: '#ffffff', top2: '#c9e2f2', dirt: '#9fb8c8', sun: '#fff2b0', decor: 'snowfall', spike: '#bfe3ff' },
+  night:   { skyA: '#0d1b3d', skyB: '#27406e', top: '#2e6640', top2: '#1f4a30', dirt: '#2d2440', moon: true, decor: 'stars', spike: '#3d5a3d' },
+  beach:   { skyA: '#7ecbff', skyB: '#e6f7ff', top: '#f0d894', top2: '#d9bc76', dirt: '#cfb070', sun: '#ffcf5a', decor: 'shells', spike: '#ff7f50' },
+  tower:   { skyA: '#8fa8ff', skyB: '#ffd9e8', top: '#58c24f', top2: '#3f9c37', dirt: '#8a5a35', sun: '#ffb04a', decor: 'flowers', spike: '#4a7a2f' },
+  crystal: { skyA: '#1c1233', skyB: '#3d2f63', top: '#8f6fd8', top2: '#6b4fb0', dirt: '#3b2d55', decor: 'crystals', spike: '#b96bff' },
+  volcano: { skyA: '#2d1015', skyB: '#7a2d1a', top: '#6e5147', top2: '#4a332c', dirt: '#3d2620', decor: 'embers', spike: '#ff5a3c' },
+  rainbow: { skyA: null, top: '#ffd1e8', top2: '#f0a8cf', dirt: '#b59ab0', sun: '#fff2b0', decor: 'arches', spike: '#ff3b6b' },
 };
 
-// unicorn flee speed ramps past the player's 4.3 by level 5 — boosts and graze ambushes win levels
+// pits/spikes scale with level; unicorn flee speed ramps past the player's 4.3 by level 5
 const LEVELS = [
-  { theme: 'meadow',  worldW: 2000, speed: 3.2,  panic: 230, grazeMin: .75, grazeMax: 1.25, everyMin: 2.0, everyMax: 3.6 },
-  { theme: 'sunset',  worldW: 2200, speed: 3.45, panic: 240, grazeMin: .7,  grazeMax: 1.15, everyMin: 2.2, everyMax: 3.8 },
-  { theme: 'forest',  worldW: 2400, speed: 3.7,  panic: 250, grazeMin: .65, grazeMax: 1.1,  everyMin: 2.4, everyMax: 4.0 },
-  { theme: 'snow',    worldW: 2400, speed: 3.95, panic: 260, grazeMin: .6,  grazeMax: 1.05, everyMin: 2.6, everyMax: 4.2 },
-  { theme: 'night',   worldW: 2600, speed: 4.2,  panic: 270, grazeMin: .6,  grazeMax: 1.0,  everyMin: 2.8, everyMax: 4.4 },
-  { theme: 'beach',   worldW: 2600, speed: 4.45, panic: 280, grazeMin: .55, grazeMax: .95,  everyMin: 3.0, everyMax: 4.6 },
-  { theme: 'tower',   worldW: 1000, worldH: 3600, speed: 4.5, panic: 260, grazeMin: .55, grazeMax: .9, everyMin: 2.6, everyMax: 4.2, tower: true },
-  { theme: 'crystal', worldW: 2800, speed: 4.8,  panic: 310, grazeMin: .5,  grazeMax: .9,  everyMin: 3.2, everyMax: 5.0 },
-  { theme: 'volcano', worldW: 3000, speed: 5.0,  panic: 320, grazeMin: .5,  grazeMax: .85, everyMin: 3.4, everyMax: 5.2 },
-  { theme: 'rainbow', worldW: 3200, speed: 5.2,  panic: 330, grazeMin: .45, grazeMax: .8,  everyMin: 3.6, everyMax: 5.4 },
+  { theme: 'meadow',  name: 'Sunny Meadow',  worldW: 2000, speed: 3.2,  panic: 230, grazeMin: .75, grazeMax: 1.25, everyMin: 2.0, everyMax: 3.6, pits: 2, pitW: 80,  spikes: 2 },
+  { theme: 'sunset',  name: 'Sunset Stroll',  worldW: 2200, speed: 3.45, panic: 240, grazeMin: .7,  grazeMax: 1.15, everyMin: 2.2, everyMax: 3.8, pits: 3, pitW: 95,  spikes: 3 },
+  { theme: 'forest',  name: 'Deep Forest',    worldW: 2400, speed: 3.7,  panic: 250, grazeMin: .65, grazeMax: 1.1,  everyMin: 2.4, everyMax: 4.0, pits: 3, pitW: 105, spikes: 4 },
+  { theme: 'snow',    name: 'Snowy Peaks',    worldW: 2400, speed: 3.95, panic: 260, grazeMin: .6,  grazeMax: 1.05, everyMin: 2.6, everyMax: 4.2, pits: 4, pitW: 110, spikes: 4 },
+  { theme: 'night',   name: 'Starry Night',   worldW: 2600, speed: 4.2,  panic: 270, grazeMin: .6,  grazeMax: 1.0,  everyMin: 2.8, everyMax: 4.4, pits: 4, pitW: 120, spikes: 5 },
+  { theme: 'beach',   name: 'Sunny Beach',    worldW: 2600, speed: 4.45, panic: 280, grazeMin: .55, grazeMax: .95,  everyMin: 3.0, everyMax: 4.6, pits: 4, pitW: 130, spikes: 5 },
+  { theme: 'tower',   name: 'The Tall Tower', worldW: 1000, worldH: 3000, speed: 4.5, panic: 260, grazeMin: .55, grazeMax: .9, everyMin: 2.6, everyMax: 4.2, tower: true },
+  { theme: 'crystal', name: 'Crystal Cave',   worldW: 2800, speed: 4.8,  panic: 310, grazeMin: .5,  grazeMax: .9,  everyMin: 3.2, everyMax: 5.0, pits: 5, pitW: 140, spikes: 6 },
+  { theme: 'volcano', name: 'Volcano Run',    worldW: 3000, speed: 5.0,  panic: 320, grazeMin: .5,  grazeMax: .85, everyMin: 3.4, everyMax: 5.2, pits: 5, pitW: 150, spikes: 7 },
+  { theme: 'rainbow', name: 'Rainbow Road',   worldW: 3200, speed: 5.2,  panic: 330, grazeMin: .45, grazeMax: .8,  everyMin: 3.6, everyMax: 5.4, pits: 5, pitW: 160, spikes: 7 },
 ];
 
-// horizontal levels: alternating two-tier platforms (300px steps land inside the jump arc)
-function genPlats(worldW) {
-  const out = [{ x: 0, y: 500, w: worldW, ground: true }];
-  for (let x = 150, i = 0; x < worldW - 230; x += 300, i++)
-    out.push({ x, y: i % 2 ? 300 : 390, w: 185 - (i % 3) * 15 });
-  return out;
+// horizontal levels: ground split into segments with pits between, floating platforms skipped over pits
+function genPlats(L) {
+  const plats = [], pits = [];
+  let x = 0, n = L.pits;
+  while (x < L.worldW) {
+    const remaining = L.worldW - x;
+    let segLen = x === 0 ? 860 : Math.min(320 + rand(0, 180), remaining - (n > 0 ? L.pitW + 60 : 0));
+    if (segLen < 140 || remaining - segLen < 140) segLen = remaining; // no room for a pit: run to the end
+    plats.push({ x, y: 500, w: segLen, ground: true });
+    x += segLen;
+    if (n > 0 && x < L.worldW - 260) {
+      const pw = Math.round(L.pitW + rand(-8, 8));
+      pits.push({ x, w: pw });
+      x += pw; n--;
+    }
+  }
+  for (let px = 150, i = 0; px < L.worldW - 230; px += 300, i++) {
+    if (!pits.some(pt => px < pt.x + pt.w + 30 && px + 185 > pt.x - 30))
+      plats.push({ x: px, y: i % 2 ? 300 : 390, w: 185 - (i % 3) * 15 });
+  }
+  return { plats, pits };
 }
-// vertical tower: 3 columns, 118px steps (jump apex is 163), first hop 110 off the floor
+// vertical tower: ping-pong columns so every step up is an adjacent, reachable platform
+// (jump apex is 163px; steps are 118px up with a 90px horizontal gap between column edges)
 function genTower(worldW, worldH) {
   const gY = worldH - 40;
   const out = [{ x: 0, y: gY, w: worldW, ground: true }];
+  const cols = [90, 370, 650];
   for (let y = gY - 110, i = 0; y >= 240; y -= 118, i++)
-    out.push({ x: 90 + (i % 3) * 300, y, w: 180 });
+    out.push({ x: cols[[0, 1, 2, 1][i % 4]], y, w: 190 });
   return out;
 }
 // ── character designer ──
@@ -263,12 +294,14 @@ function makeEnt(x, y, w, h) {
   return { x, y, w, h, vx: 0, vy: 0, facing: 1, grounded: false, animT: 0, atWall: false };
 }
 const player = makeEnt(90, 462, 26, 38);
-Object.assign(player, { boostT: 0, boostDir: 1 });
+Object.assign(player, { boostT: 0, boostDir: 1, invulnT: 0 });
 const uni = makeEnt(730, 454, 58, 46);
-Object.assign(uni, { grazing: false, grazeLeft: 0, grazeT: 0, wanderT: 0, walking: true, wdir: 1, fleeing: false, crossing: false });
+Object.assign(uni, { grazing: false, grazeLeft: 0, grazeT: 0, wanderT: 0, walking: true, wdir: 1, fleeing: false, crossing: false, plat: null, idle: null, idleT: 0, idleCooldown: 0 });
 
-let level = 0, plats = [], state = 'start';
+let level = 0, plats = [], pits = [], spikes = [], state = 'start';
 let worldW = 0, worldH = 540, groundY = 500, camX = 0, camY = 0, skyW = W, tick = 0;
+let hearts = MAX_HEARTS, best = 0, lastInputTick = 0;
+try { best = +localStorage.getItem('uc-best') || 0; } catch (e) {}
 let arrows = [], decor = [], clouds = [];
 const sparkles = [];
 
@@ -276,13 +309,29 @@ const hudEl = document.getElementById('hud');
 const startOv = document.getElementById('startOv');
 const clearOv = document.getElementById('clearOv');
 const winOv = document.getElementById('winOv');
+const overOv = document.getElementById('overOv');
 const nextLvText = document.getElementById('nextLvText');
 
 function loadLevel(i) {
   level = i;
   const L = LEVELS[i], T = THEMES[L.theme];
   worldW = L.worldW; worldH = L.worldH || 540; groundY = L.tower ? worldH - 40 : 500;
-  plats = L.tower ? genTower(worldW, worldH) : genPlats(worldW);
+  const gen = L.tower ? { plats: genTower(worldW, worldH), pits: [] } : genPlats(L);
+  plats = gen.plats; pits = gen.pits;
+  spikes = [];
+  if (!L.tower) {
+    const segs = plats.filter(p => p.ground);
+    let placed = 0, si = 0, tries = 0;
+    while (placed < L.spikes && tries++ < 300) {
+      const s = segs[si++ % segs.length];
+      if (s.w < 260) continue;
+      const fx = s.x + s.w * (0.3 + 0.4 * ((placed % 3) / 2)) + rand(-30, 30);
+      if (fx < 170 || fx > worldW - 160 || Math.abs(fx - 90) < 80 || Math.abs(fx - 730) < 90) continue;
+      if (spikes.some(sp => Math.abs(sp.x - fx) < 90)) continue;
+      spikes.push({ x: fx, y: groundY - 16, w: 26, h: 16 });
+      placed++;
+    }
+  }
   skyW = (worldW - W) * 0.4 + W; // cloud band width at 0.4 parallax
   clouds = T.moon || L.theme === 'crystal' || L.theme === 'volcano'
     ? [] // clear night/cave skies
@@ -295,28 +344,30 @@ function loadLevel(i) {
   else if (d === 'trees') for (let x = 60; x < worldW; x += 260) decor.push({ x: x + (x * 37) % 60, s: rand(.8, 1.3) });
   else if (d === 'stars') for (let j = 0; j < 44; j++) decor.push({ x: rand(0, W), y: rand(20, 170), s: rand(.5, 1.3) });
   else if (d === 'snowfall') for (let j = 0; j < 60; j++) decor.push({ x: rand(0, W), y: rand(0, H), s: rand(.5, 1.4) });
-  else if (d === 'shells') for (let x = 120; x < worldW; x += 240) decor.push({ x: x + (x * 53) % 70, s: rand(.8, 1.2) });
+  else if (d === 'shells') for (let x = 120, j = 0; x < worldW; x += 190, j++) decor.push({ x: x + (x * 53) % 70, s: rand(.8, 1.2), star: j % 3 === 2 });
   else if (d === 'crystals') for (let x = 200; x < worldW; x += 300) decor.push({ x: x + (x * 31) % 80, s: rand(.7, 1.4) });
   else if (d === 'embers') for (let j = 0; j < 40; j++) decor.push({ x: rand(0, W), y: rand(0, H), s: rand(.5, 1) });
   else if (d === 'arches') for (let x = 260; x < worldW; x += 420) decor.push({ x, s: rand(.8, 1.2) });
   arrows = [];
   if (L.tower) {
-    plats.forEach((p, i) => { if (i > 0 && i % 4 === 2) arrows.push({ x: p.x + 90, y: p.y - 26, dir: i % 8 === 2 ? 1 : -1, active: true, respawnT: 0 }); });
+    plats.forEach((p, i) => { if (i > 0 && i % 4 === 2) arrows.push({ x: p.x + 95, y: p.y - 26, dir: i % 8 === 2 ? 1 : -1, active: true, respawnT: 0 }); });
   } else {
     for (let x = 430, j = 0; x < worldW - 240; x += 620, j++)
       arrows.push({ x, y: groundY - 26, dir: j % 2 ? -1 : 1, active: true, respawnT: 0 });
   }
   Object.assign(player, {
-    x: 90, y: groundY - 38, vx: 0, vy: 0, facing: 1, grounded: true, animT: 0, boostT: 0, boostDir: 1,
+    x: 90, y: groundY - 38, vx: 0, vy: 0, facing: 1, grounded: true, animT: 0, boostT: 0, boostDir: 1, invulnT: 0,
   });
   Object.assign(uni, {
     x: 730, y: groundY - 46, vx: 0, vy: 0, facing: -1, grounded: true, animT: 0,
     grazing: false, fleeing: false, crossing: false, grazeLeft: 0,
     grazeT: rand(60, 180), wanderT: rand(60, 180), walking: true, wdir: 1,
+    plat: null, idle: null, idleT: 0, idleCooldown: 0,
   });
   sparkles.length = 0;
   camX = 0; camY = Math.max(0, Math.min(player.y + player.h / 2 - H * .58, worldH - H));
-  hudEl.textContent = `Level ${i + 1} of ${LEVELS.length}`;
+  lastInputTick = tick;
+  hudEl.textContent = `${L.name} — Level ${i + 1} of ${LEVELS.length}`;
 }
 
 // ── input ──
@@ -324,9 +375,10 @@ const keys = {};
 function keyName(e) { return e.key.length === 1 ? e.key.toLowerCase() : e.key; }
 addEventListener('keydown', e => {
   keys[keyName(e)] = true;
+  lastInputTick = tick;
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
   if (state !== 'play' && (e.key === 'Enter' || e.key === ' ')) {
-    for (const ov of [startOv, clearOv, winOv]) if (!ov.hidden) ov.querySelector('button').click();
+    for (const ov of [startOv, clearOv, winOv, overOv]) if (!ov.hidden) ov.querySelector('button').click();
   }
 });
 addEventListener('keyup', e => { keys[keyName(e)] = false; });
@@ -344,11 +396,47 @@ function physics(e, k) {
   if (e.vy >= 0) {
     for (const p of plats) {
       if (pb <= p.y + 8 && e.y + e.h >= p.y && e.x + e.w > p.x + 4 && e.x < p.x + p.w - 4) {
-        e.y = p.y - e.h; e.vy = 0; e.grounded = true; break;
+        e.y = p.y - e.h; e.vy = 0; e.grounded = true; e.plat = p; break;
       }
     }
   }
-  if (e.y > worldH + 80) { e.y = groundY - e.h; e.vy = 0; } // safety net (teleports, tunneling)
+}
+
+// void just past this entity's feet? (pit or tower gap)
+function edgeAhead(e) {
+  const fx = e.x + (e.vx >= 0 ? e.w + 24 : -24);
+  return !plats.some(p => fx >= p.x && fx <= p.x + p.w && Math.abs(p.y - (e.y + e.h)) < 6);
+}
+
+// nearest ground segment to an x (respawn point)
+function groundSegAt(x) {
+  let bestP = null, bd = 1e9;
+  for (const p of plats) {
+    if (!p.ground) continue;
+    const d = p.x <= x && x <= p.x + p.w ? 0 : Math.abs(p.x + p.w / 2 - x);
+    if (d < bd) { bd = d; bestP = p; }
+  }
+  return bestP;
+}
+
+function damage() {
+  if (player.invulnT > 0) return;
+  hearts--;
+  player.invulnT = 110;
+  for (let i = 0; i < 12; i++)
+    sparkles.push({ x: player.x + 13 + rand(-12, 12), y: player.y + 19 + rand(-14, 14), life: 1, col: '#ff3b6b' });
+  if (hearts <= 0) {
+    state = 'over';
+    overOv.hidden = false;
+    return;
+  }
+  // fell in a pit: hop back onto solid ground nearby
+  const seg = groundSegAt(player.x);
+  if (seg) {
+    player.x = Math.max(seg.x + 30, Math.min(player.x, seg.x + seg.w - 60));
+    player.y = seg.y - player.h;
+  }
+  player.vy = 0; player.vx = 0;
 }
 
 function updatePlayer(k) {
@@ -370,7 +458,29 @@ function updatePlayer(k) {
   if (J && player.grounded) player.vy = JUMP;
   if (!J && player.vy < -6) player.vy = -6; // let go early = shorter hop
   physics(player, k);
+  if (player.invulnT > 0) player.invulnT -= k;
   if (Math.abs(player.vx) > 0.3) player.animT += (player.grounded ? 0.3 : 0.22) * k;
+  // spikes
+  if (player.invulnT <= 0) {
+    for (const s of spikes) {
+      if (overlap(player, s, 4)) { damage(); player.vy = -8; break; }
+    }
+  }
+  // fell in a pit (below ground level in a horizontal level)
+  if (!LEVELS[level].tower && player.y > 520) damage();
+  // hard safety net for anything weird
+  if (player.y > worldH + 120) { const seg = groundSegAt(player.x); if (seg) { player.x = seg.x + 40; player.y = seg.y - player.h; player.vy = 0; } }
+}
+
+// platform directly above the unicorn, if any is reachable (tower climbing)
+function platAbove(e) {
+  let bestP = null, bd = 1e9;
+  for (const p of plats) {
+    if (p.ground || p.y >= e.y - 40 || p.y < e.y - 150) continue;
+    const d = Math.abs(p.x + p.w / 2 - (e.x + e.w / 2));
+    if (d < bd) { bd = d; bestP = p; }
+  }
+  return bd <= 330 ? bestP : null;
 }
 
 function updateUnicorn(k) {
@@ -384,14 +494,36 @@ function updateUnicorn(k) {
   if (uni.crossing) {
     // mid-leap over the player: hold course until we land
   } else if (uni.fleeing) {
-    uni.facing = dist > 0 ? -1 : 1;
-    uni.vx = uni.facing * L.speed;
-    if (uni.grounded && uni.atWall) {
-      // cornered: leap over the player to the open side
-      uni.crossing = true; uni.vy = JUMP;
-      uni.vx = (dist > 0 ? 1 : -1) * L.speed; uni.facing = Math.sign(uni.vx);
-    } else if (uni.grounded && (L.tower ? Math.random() < 0.08 * k : Math.random() < 0.005 * k)) {
-      uni.vy = JUMP * 0.9; // in the tower she climbs while fleeing
+    if (!uni.grounded && L.tower) {
+      // mid-climb hop: hold course until we land
+    } else {
+    const target = L.tower ? platAbove(uni) : null;
+    if (target) {
+      // climb: run toward the platform above; hop up through it if directly overhead,
+      // else edge-jump across to the adjacent column (columns are 90px apart)
+      const tx = target.x + target.w / 2;
+      const dx = tx - (uni.x + uni.w / 2);
+      if (Math.abs(dx) < 14) {
+        uni.vx = 0;
+        if (uni.grounded) { uni.vy = JUMP; uni.y -= 2; } // nudge past the one-way sensor
+      } else {
+        uni.vx = Math.sign(dx) * L.speed;
+        uni.facing = Math.sign(uni.vx);
+        if (uni.grounded && edgeAhead(uni)) uni.vy = JUMP;
+      }
+    } else {
+      uni.facing = dist > 0 ? -1 : 1;
+      uni.vx = uni.facing * L.speed;
+      if (uni.grounded && uni.atWall) {
+        // cornered (or tower top): leap over the player to the open side
+        uni.crossing = true; uni.vy = JUMP;
+        uni.vx = (dist > 0 ? 1 : -1) * L.speed; uni.facing = Math.sign(uni.vx);
+      } else if (uni.grounded && edgeAhead(uni)) {
+        uni.vy = JUMP; // jump the pit at full flee speed
+      } else if (uni.grounded && !L.tower && Math.random() < 0.005 * k) {
+        uni.vy = JUMP * 0.9;
+      }
+      }
     }
   } else if (uni.grazing) {
     uni.vx = 0;
@@ -406,8 +538,13 @@ function updateUnicorn(k) {
   } else {
     uni.grazeT -= k;
     uni.wanderT -= k;
-    if (uni.walking) {
-      if (uni.atWall) uni.wdir = -uni.wdir; // don't moonwalk at world edges
+    let homing = L.tower && player.y > uni.y + 120; // she ambles down toward you in the tower
+    if (homing) {
+      uni.wdir = dist > 0 ? 1 : -1;
+      uni.vx = uni.wdir * 0.9; uni.facing = uni.wdir;
+      // no edge turn: she hops down a level to keep coming
+    } else if (uni.walking) {
+      if (uni.atWall || (uni.grounded && edgeAhead(uni))) uni.wdir = -uni.wdir; // stay off ledges
       uni.vx = uni.wdir * 0.9; uni.facing = uni.wdir;
       if (uni.grounded && (L.tower ? Math.random() < 0.012 * k : Math.random() < 0.003 * k)) uni.vy = JUMP * 0.85;
     } else uni.vx = 0;
@@ -426,6 +563,17 @@ function updateUnicorn(k) {
       y: uni.y + uni.h * 0.55, life: 1,
       col: RAINBOW[(Math.random() * RAINBOW.length) | 0],
     });
+  }
+  // ── idle easter egg: nobody playing? she gets cute ──
+  if (uni.idleCooldown > 0) uni.idleCooldown -= k;
+  if (uni.idle) {
+    uni.idleT -= k;
+    if (uni.idle === 'poop' && Math.random() < 0.25 && sparkles.length < 100)
+      sparkles.push({ x: uni.x + rand(0, uni.w), y: uni.y + uni.h - 4, life: 1, col: RAINBOW[(Math.random() * 6) | 0] });
+    if (uni.idleT <= 0) { uni.idle = null; uni.idleCooldown = 300; }
+  } else if (tick - lastInputTick > 700 && !uni.fleeing && uni.idleCooldown <= 0 && uni.grounded) {
+    uni.idle = ['poop', 'graze', 'wink'][(Math.random() * 3) | 0];
+    uni.idleT = 220;
   }
 }
 
@@ -541,10 +689,30 @@ function drawDecor() {
       ctx.beginPath(); ctx.arc(f.x, f.y, 2.2 * f.s, 0, 7); ctx.fill();
     }
   } else if (d === 'shells') {
+    // scallop shells and the occasional starfish, alternating down the beach
     for (const f of decor) {
-      ctx.strokeStyle = '#ff9a5c'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(f.x, groundY, 7 * f.s, Math.PI, 0); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(f.x - 5 * f.s, groundY - 4); ctx.lineTo(f.x, groundY); ctx.stroke();
+      const s = f.s;
+      if (f.star) { // starfish: 5 bumps around a center
+        ctx.fillStyle = '#ff8c69';
+        for (let i = 0; i < 5; i++) {
+          const a = i * Math.PI * 2 / 5 - Math.PI / 2;
+          ctx.beginPath();
+          ctx.ellipse(f.x + Math.cos(a) * 6 * s, groundY - 5 + Math.sin(a) * 6 * s, 4 * s, 2.6 * s, a, 0, 7);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#ffb08a';
+        ctx.beginPath(); ctx.arc(f.x, groundY - 5, 2.4 * s, 0, 7); ctx.fill();
+      } else { // scallop: filled fan + ridge lines, no "no symbol" here
+        ctx.fillStyle = '#fff0e0';
+        ctx.beginPath(); ctx.arc(f.x, groundY - 1, 8 * s, Math.PI, 0); ctx.fill();
+        ctx.fillStyle = '#ffd9b8';
+        ctx.beginPath(); ctx.arc(f.x, groundY - 1, 4.5 * s, Math.PI, 0); ctx.fill();
+        ctx.strokeStyle = '#e8b88f'; ctx.lineWidth = 1.2;
+        for (let i = -2; i <= 2; i++) {
+          const a = Math.PI + (i + 0.5) * (Math.PI / 6);
+          ctx.beginPath(); ctx.moveTo(f.x, groundY - 1); ctx.lineTo(f.x + Math.cos(a) * 7.4 * s, groundY - 1 + Math.sin(a) * 7.4 * s); ctx.stroke();
+        }
+      }
     }
   } else if (d === 'crystals') {
     for (const f of decor) {
@@ -588,6 +756,23 @@ function drawPlatforms() {
       ctx.beginPath(); ctx.roundRect(p.x, p.y, p.w, 12, 7); ctx.fill();
       ctx.fillStyle = T.top2; ctx.fillRect(p.x + 5, p.y + 9, p.w - 10, 3);
     }
+  }
+  // pits show the void below (a little darker than the dirt)
+  if (!LEVELS[level].tower) {
+    ctx.fillStyle = 'rgba(0,0,0,.45)';
+    for (const pt of pits) ctx.fillRect(pt.x, groundY - 2, pt.w, worldH - groundY + 20);
+  }
+  // spikes: small triangles in theme color, sitting on the ground
+  ctx.fillStyle = THEMES[LEVELS[level].theme].spike;
+  for (const s of spikes) {
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y + s.h); ctx.lineTo(s.x + s.w / 2, s.y); ctx.lineTo(s.x + s.w, s.y + s.h);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.25)';
+    ctx.beginPath();
+    ctx.moveTo(s.x + s.w / 2, s.y); ctx.lineTo(s.x + s.w / 2 + 5, s.y + s.h); ctx.lineTo(s.x + s.w / 2 - 2, s.y + s.h);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = THEMES[LEVELS[level].theme].spike;
   }
 }
 
@@ -635,6 +820,7 @@ function drawPlayer(p, c) {
   const moving = Math.abs(p.vx) > 0.3;
   const a = (moving && p.grounded) ? Math.sin(p.animT) * 0.7 : 0.12;
   c.save();
+  if (p.invulnT > 0 && ((tick / 4) | 0) % 2 === 0) c.globalAlpha = .35; // hurt flash
   c.translate(cx, 0); c.scale(p.facing, 1); c.translate(-cx, 0);
   c.lineCap = 'round';
   // legs
@@ -710,6 +896,15 @@ function drawUnicorn(u) {
   ctx.translate(0, bounce);
   ctx.translate(cx, 0); ctx.scale(u.facing, 1); ctx.translate(-cx, 0);
   ctx.lineCap = 'round';
+  // idle easter eggs layer in before the body
+  if (u.idle === 'poop') {
+    // rainbow droppings piling up behind her
+    const px = cx - u.facing * 44, py = u.y + u.h - 2;
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = RAINBOW[(i + ((tick / 30) | 0)) % 6];
+      ctx.beginPath(); ctx.arc(px - u.facing * i * 9, py - i * 2, 4.5 - i * 0.7, 0, 7); ctx.fill();
+    }
+  }
   // tail
   ctx.lineWidth = 4;
   for (let i = 0; i < 4; i++) {
@@ -720,38 +915,55 @@ function drawUnicorn(u) {
     ctx.quadraticCurveTo(cx - 38, u.y + 18 + i * 3 + sway, cx - 41, u.y + 26 + i * 4 + sway);
     ctx.stroke();
   }
-  // legs (gallop)
+  // legs (gallop) — grazing tucks them under
   ctx.strokeStyle = '#f6f3fc'; ctx.lineWidth = 5;
-  const leg = (px, ph) => {
-    const a = moving ? Math.sin(u.animT + ph) * 0.6 : 0.14;
+  if (u.idle === 'graze' || u.grazing) {
     ctx.beginPath();
-    ctx.moveTo(px, legY);
-    ctx.lineTo(px + Math.sin(a) * 13, legY + Math.cos(a) * 13);
+    ctx.moveTo(cx - 14, legY); ctx.lineTo(cx - 16, u.y + u.h - 1);
+    ctx.moveTo(cx + 14, legY); ctx.lineTo(cx + 16, u.y + u.h - 1);
     ctx.stroke();
-  };
-  leg(cx - 16, 0); leg(cx - 16, Math.PI); leg(cx + 16, Math.PI * 0.9); leg(cx + 16, Math.PI * 1.9);
+    // head dips toward the grass
+    ctx.fillStyle = '#fdfaff';
+    ctx.beginPath(); ctx.ellipse(cx + 29, u.y + 26, 9.5, 6.5, 0.5, 0, 7); ctx.fill();
+  } else {
+    const leg = (px, ph) => {
+      const a = moving ? Math.sin(u.animT + ph) * 0.6 : 0.14;
+      ctx.beginPath();
+      ctx.moveTo(px, legY);
+      ctx.lineTo(px + Math.sin(a) * 13, legY + Math.cos(a) * 13);
+      ctx.stroke();
+    };
+    leg(cx - 16, 0); leg(cx - 16, Math.PI); leg(cx + 16, Math.PI * 0.9); leg(cx + 16, Math.PI * 1.9);
+  }
   // body
   ctx.fillStyle = '#fdfaff';
   ctx.beginPath(); ctx.ellipse(cx, u.y + 22, 26, 12.5, 0, 0, 7); ctx.fill();
-  // neck + head
-  ctx.strokeStyle = '#fdfaff'; ctx.lineWidth = 13;
-  ctx.beginPath(); ctx.moveTo(cx + 15, u.y + 20); ctx.lineTo(cx + 26, u.y + 7); ctx.stroke();
-  ctx.fillStyle = '#fdfaff';
-  ctx.beginPath(); ctx.ellipse(cx + 29, u.y + 5, 9.5, 6.5, 0, 0, 7); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(cx + 36, u.y + 7, 5, 4.5, 0, 0, 7); ctx.fill();
-  // ear
-  ctx.beginPath();
-  ctx.moveTo(cx + 24, u.y - 1); ctx.lineTo(cx + 27, u.y - 7); ctx.lineTo(cx + 30, u.y + 1); ctx.fill();
-  // horn
-  ctx.fillStyle = '#ffd700';
-  ctx.beginPath();
-  ctx.moveTo(cx + 27, u.y - 1); ctx.lineTo(cx + 31, u.y + 1); ctx.lineTo(cx + 33, u.y - 13); ctx.fill();
-  ctx.fillStyle = '#fff3b0';
-  ctx.beginPath();
-  ctx.moveTo(cx + 29, u.y - 2); ctx.lineTo(cx + 30.5, u.y - 1); ctx.lineTo(cx + 31, u.y - 9); ctx.fill();
-  // eye
-  ctx.fillStyle = '#333';
-  ctx.beginPath(); ctx.arc(cx + 30, u.y + 3, 1.6, 0, 7); ctx.fill();
+  if (u.idle !== 'graze' && !u.grazing) {
+    // neck + head (skip when head is dipped to eat)
+    ctx.strokeStyle = '#fdfaff'; ctx.lineWidth = 13;
+    ctx.beginPath(); ctx.moveTo(cx + 15, u.y + 20); ctx.lineTo(cx + 26, u.y + 7); ctx.stroke();
+    ctx.fillStyle = '#fdfaff';
+    ctx.beginPath(); ctx.ellipse(cx + 29, u.y + 5, 9.5, 6.5, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 36, u.y + 7, 5, 4.5, 0, 0, 7); ctx.fill();
+    // ear
+    ctx.beginPath();
+    ctx.moveTo(cx + 24, u.y - 1); ctx.lineTo(cx + 27, u.y - 7); ctx.lineTo(cx + 30, u.y + 1); ctx.fill();
+    // horn
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    ctx.moveTo(cx + 27, u.y - 1); ctx.lineTo(cx + 31, u.y + 1); ctx.lineTo(cx + 33, u.y - 13); ctx.fill();
+    ctx.fillStyle = '#fff3b0';
+    ctx.beginPath();
+    ctx.moveTo(cx + 29, u.y - 2); ctx.lineTo(cx + 30.5, u.y - 1); ctx.lineTo(cx + 31, u.y - 9); ctx.fill();
+    // eye — a happy squint for the wink
+    if (u.idle === 'wink') {
+      ctx.strokeStyle = '#333'; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.arc(cx + 30, u.y + 3, 2.2, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+    } else {
+      ctx.fillStyle = '#333';
+      ctx.beginPath(); ctx.arc(cx + 30, u.y + 3, 1.6, 0, 7); ctx.fill();
+    }
+  }
   // mane
   ctx.lineWidth = 3.5;
   for (let i = 0; i < 4; i++) {
@@ -788,7 +1000,7 @@ function draw() {
   drawSparkles();
   drawArrows();
   drawUnicorn(uni);
-  drawPlayer(player, ctx);
+  if (!(player.invulnT > 0 && ((tick / 4) | 0) % 2 === 0)) drawPlayer(player, ctx);
   ctx.restore();
   drawOffscreenHint();
 }
@@ -796,26 +1008,43 @@ function draw() {
 // ── game flow ──
 function onCatch() {
   state = 'clear';
+  if (hearts < MAX_HEARTS) hearts++; // catching her is a heartwarming experience
   if (level < LEVELS.length - 1) {
-    nextLvText.textContent = `Ready for Level ${level + 2}?`;
+    nextLvText.textContent = `Ready for Level ${level + 2}? ❤ ${'❤'.repeat(hearts)}`;
     clearOv.hidden = false;
   } else {
+    best = Math.max(best, hearts);
+    try { localStorage.setItem('uc-best', best); } catch (e) {}
+    document.getElementById('winStats').textContent = `You won with ${hearts} ${hearts === 1 ? 'heart' : 'hearts'}! Best: ${best} ❤`;
     winOv.hidden = false;
   }
 }
 
-document.getElementById('startBtn').onclick = () => { startOv.hidden = true; state = 'play'; };
+function startGame() {
+  hearts = MAX_HEARTS;
+  loadLevel(0);
+  state = 'play';
+}
+
+document.getElementById('startBtn').onclick = startGame;
 document.getElementById('nextBtn').onclick = () => { clearOv.hidden = true; loadLevel(level + 1); state = 'play'; };
-document.getElementById('againBtn').onclick = () => { winOv.hidden = true; loadLevel(0); state = 'play'; };
+document.getElementById('againBtn').onclick = () => { winOv.hidden = true; startGame(); };
+document.getElementById('retryBtn').onclick = () => { overOv.hidden = true; startGame(); };
+
+function updateHud() {
+  hudEl.textContent = `${LEVELS[level].name} — Level ${level + 1} of ${LEVELS.length} — ${'❤'.repeat(hearts)}${'♡'.repeat(MAX_HEARTS - hearts)}`;
+}
 
 // debug handle for smoke tests
 window.__uc = {
   player, uni,
   get arrows() { return arrows; },
+  get pits() { return pits; }, get spikes() { return spikes; },
+  get hearts() { return hearts; }, set hearts(v) { hearts = v; },
   char,
   getState: () => state, setState: v => state = v,
   cam: () => ({ x: camX, y: camY }), world: () => worldW, lvl: () => level,
-  load: loadLevel,
+  load: loadLevel, start: startGame,
 };
 
 loadLevel(0);
@@ -831,6 +1060,7 @@ function loop(now) {
     updateUnicorn(k);
     tryPickups();
     updateCamera(k);
+    updateHud();
     if (overlap(player, uni, 8)) onCatch();
   }
   updateSparkles(k);

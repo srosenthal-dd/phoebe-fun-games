@@ -4,9 +4,56 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Phoebe's Fun Games</title>
-<meta http-equiv="refresh" content="0; url=unicorn-chase/">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #0d1117, #161b2e, #0f1f3f);
+    color: #eee;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+  }
+  h1 {
+    font-size: 2.4rem; margin-bottom: 6px;
+    background: linear-gradient(90deg, #ff0080, #ff8c00, #ffd700, #00d26a, #00bfff, #8a2be2, #ff0080);
+    background-size: 300% 100%;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    text-align: center; animation: rainbow-shift 4s linear infinite;
+  }
+  @keyframes rainbow-shift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+  .subtitle { color: #7a8aa0; margin-bottom: 28px; font-size: .95rem; }
+  .games { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; }
+  .card {
+    display: block; width: 300px; padding: 26px 24px; text-align: center; text-decoration: none;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 16px;
+    transition: transform .15s, border-color .15s;
+  }
+  .card:hover { transform: translateY(-4px) scale(1.02); border-color: rgba(255,255,255,.3); }
+  .card .emoji { font-size: 3rem; margin-bottom: 10px; }
+  .card h2 { font-size: 1.3rem; margin-bottom: 6px; color: #fff; }
+  .card p { font-size: .85rem; color: #aab; margin-bottom: 12px; }
+  .card .date { font-size: .75rem; color: #667; }
+</style>
 </head>
 <body>
-<p>Redirecting to <a href="unicorn-chase/">🦄 Unicorn Chase</a>…</p>
+<h1>Phoebe's Fun Games</h1>
+<p class="subtitle">Exploring programming and making games with Phoebe :)</p>
+<div class="games">
+  <a class="card" href="rainbow_radar.html">
+    <div class="emoji">🌈</div>
+    <h2>Rainbow Radar</h2>
+    <p>A two-player game of hidden rainbows and clever guesses.</p>
+    <span class="date">August 2026</span>
+  </a>
+  <a class="card" href="unicorn-chase/">
+    <div class="emoji">🦄</div>
+    <h2>Unicorn Chase</h2>
+    <p>Chase the rainbow unicorn through 10 magical worlds. Catch her to win!</p>
+    <span class="date">October 2026</span>
+  </a>
+</div>
 </body>
 </html>
